@@ -1,18 +1,4 @@
 ﻿#!/usr/bin/env python 
-# -*- coding: utf-8 -*- 
-# Copyright (C) converter3dji 2022 AKKA INGENIERIE PRODUIT (support@realfusio.com)
-# 
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-# 
-#         http://www.apache.org/licenses/LICENSE-2.0
-# 
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 
 ## DEPENDENCIES
 import json
@@ -77,7 +63,6 @@ class SessionAggregator:
 		self.__mDirectorySessionsWithDuplicatedIds = []
 		self.__mDataSessions = {}
 		self.__mBorrowChanges = []
-		self.__mDataSessionsTmpLoginIndex = {}
 		
 		
 		# create a temporary folder
@@ -97,7 +82,7 @@ class SessionAggregator:
 			raise Exception('activity report is missing from zip')
 		
 		if not pIgnoreValidityCheck:
-			if not os.path.isfile(pReportValidatorExe):
+			if pReportValidatorExe is None or not os.path.isfile(pReportValidatorExe):
 				raise Exception('Fail to locate validator tool')
 			lCallRes = subprocess.call([pReportValidatorExe,self.__mActivityReport])
 			if lCallRes != 0:
@@ -142,13 +127,18 @@ class SessionAggregator:
 			self.__mDirectorySessions[lSessionId] = lSession
 		lSession = self.__mDirectorySessions[lSessionId]
 		# update informations fields
-		for f in ['native','SSO','SSO_info','@client','claims','oidcsub','lastclientcontact','redirecturi']:
+		for f in ['native','SSO','SSO_info','client@','claims','oidcsub','redirecturi']:
 			if f in  pJson:
 				lSession[f] = pJson[f]
+		if 'lastclientcontact' in pJson:
+			if 'lastclientcontact' in lSession:
+				lSession['lastclientcontact'] = max(lSession['lastclientcontact'],pJson['lastclientcontact'])
+			else:
+				lSession['lastclientcontact'] = pJson['lastclientcontact']
 		
 		lType = pJson['type'] if 'type' in pJson else None
 		lResult = pJson['result'] if 'result' in pJson else None
-		if lResult is not None and lResult != 'EC_Ok':
+		if lResult is not None and lResult != 'E_No_Error':
 			lSession['errors'].append('(%s %s) ' % (lType,lResult))
 		lSession['actions'].append(lType)
 		
@@ -170,13 +160,19 @@ class SessionAggregator:
 			self.__mDataSessions[lSessionId] = lSession
 		lSession = self.__mDataSessions[lSessionId]
 		# update informations fields
-		for f in ['proxyid','tmplogin','oidcsub','directorysessionid','lastclientcontact','native','openinfo','haslicense']:
+		for f in ['proxyurl','oidcsub','directorysessionid','native','openinfo','locallmxfeature']:
 			if f in pJson:
 				lSession[f] = pJson[f]
+		if 'lastclientcontact' in pJson:
+			if 'lastclientcontact' in lSession:
+				lSession['lastclientcontact'] = max(lSession['lastclientcontact'],pJson['lastclientcontact'])
+			else:
+				lSession['lastclientcontact'] = pJson['lastclientcontact']
+		
 		
 		lType = pJson['type'] if 'type' in pJson else None
 		lResult = pJson['result'] if 'result' in pJson else None
-		if lResult is not None and lResult != 'EC_Ok':
+		if lResult is not None and lResult != 'E_No_Error':
 			lSession['errors'].append('(%s %s) ' % (lType,lResult))
 		lSession['actions'].append(lType)
 		return lSession
@@ -251,6 +247,8 @@ class SessionAggregator:
 				# a comment, print it
 				if r.startswith('# LMX feature : '):
 					lRes['LMX_feature'] = r[16:].strip()
+				elif r.startswith('# License ID : '):
+					lRes['License_ID'] = r[15:].strip()
 				elif r.startswith('# Period : '):
 					lSplitRes = r[11:].split(' to ')
 					lRes['Period_start'] = lSplitRes[0].strip()
@@ -307,26 +305,29 @@ class SessionAggregator:
 					
 					
 					## DIRECTORY SESSION
-					if lType == 'StartDirectoryService':
-						self.__closePendingDirectorySessions('service start without close',lTs)
-					elif lType == 'StopDirectoryService':
-						self.__closePendingDirectorySessions('service stop',lTs)
-					elif lType == 'DirectoryServiceStatus':
-						lBorrowEntries.append(lJson)
-					elif lType == 'BorrowLicenseCheckOut':
-						#ignore
-						pass
-					elif lType == 'BorrowLicenseCheckIn':
-						#ignore
-						pass
-					elif lType == 'BorrowLicenseRenew':
-						#ignore
-						pass
-					elif lType == 'RequestInfiniteSessionAuth':
+					if lType == 'DirectoryApiStatus':
+						if lJson['lmxinfo'] != None:
+							lBorrowEntries.append(lJson)
+					#if lType == 'StartDirectoryService':
+					#	self.__closePendingDirectorySessions('service start without close',lTs)
+					#elif lType == 'StopDirectoryService':
+					#	self.__closePendingDirectorySessions('service stop',lTs)
+					#elif lType == 'DirectoryServiceStatus':
+					#	lBorrowEntries.append(lJson)
+					#elif lType == 'BorrowLicenseCheckOut':
+					#	#ignore
+					#	pass
+					#elif lType == 'BorrowLicenseCheckIn':
+					#	#ignore
+					#	pass
+					#elif lType == 'BorrowLicenseRenew':
+					#	#ignore
+					#	pass
+					elif lType == 'RequestDirectorySessionAuth':
 						
 						lResult = lJson['result'] if 'result' in lJson else ''
 						lSessionId = lJson['sessionid']
-						if lSessionId in self.__mDirectorySessions and lResult == 'EC_Ok':
+						if lSessionId in self.__mDirectorySessions and lResult == 'E_No_Error':
 							# sometimes a directory session id is reused by client
 							# if previous session still exists it leads to an error else we will have two sessions with same id in the report and we need to deal with it for now
 							print('/!\\ Found directorysession with reused id "%s", type %s' % (lSessionId, 'native' if lJson['native'] else 'web'))
@@ -334,15 +335,15 @@ class SessionAggregator:
 							self.__closePendingDirectorySession('sessionid reused',lJson['ts'],lPreviousSession);
 							self.__mDirectorySessionsWithDuplicatedIds.append(lPreviousSession)
 							del self.__mDirectorySessions[lSessionId]
-
+					
 						lSession = self.__editDirectorySession(lJson)
-						if lSession is not None and lResult == 'EC_Ok':
+						if lSession is not None and lResult == 'E_No_Error':
 							if 'startts' in lSession:
 								raise Exception('this directory session was already created')
 							lSession['startts'] = lTs
 							lRedirectUris.addOccurence(lJson['redirecturi'])
 							
-					elif lType == 'RequestInfiniteSessionAuthBis' or lType == 'RequestRegisterFrontEndUser':
+					elif lType == 'RequestDirectorySessionAuthBis' or lType == 'RequestRegisterFrontEndUser':
 						lSession = self.__editDirectorySession(lJson)
 						if lType == 'RequestRegisterFrontEndUser':
 							lSession['isregisterfrontenduser'] = True
@@ -350,82 +351,84 @@ class SessionAggregator:
 								raise Exception('this directory session was already created')
 							lSession['startts'] = lTs
 							
-					elif lType == 'InfiniteSessionAuthenticated' or lType == 'FrontEndUserRegistered':
+					elif lType == 'DirectorySessionAuthenticated' or lType == 'FrontEndUserRegistered':
 						lSession = self.__editDirectorySession(lJson)
 						if lType == 'FrontEndUserRegistered':
 							lSession['isregisterfrontenduser'] = True
 						lResult = lJson['result'] if 'result' in lJson else ''
-						if not lSession is None and lResult == 'EC_Ok':
+						if not lSession is None and lResult == 'E_No_Error':
 							lSession['wasauthenticated'] = True
 							
-					elif lType == 'CloseInfiniteSession':
-						lSession = self.__editDirectorySession(lJson)
-						lResult = lJson['result'] if 'result' in lJson else ''
-						if not lSession is None and lResult == 'EC_Ok':
-							lSession['endts'] = lTs
-					elif lType == 'DestroyInfiniteSession':
+					#elif lType == 'CloseInfiniteSession':
+					#	lSession = self.__editDirectorySession(lJson)
+					#	lResult = lJson['result'] if 'result' in lJson else ''
+					#	if not lSession is None and lResult == 'E_No_Error':
+					#		lSession['endts'] = lTs
+					elif lType == 'DestroyDirectorySession':
 						lSession = self.__editDirectorySession(lJson)
 						if not lSession is None:
 							if not 'endts' in lSession:
 								lSession['endts'] = lTs
 							lSession['revokeinfo'] = lJson['reason'] if 'reason' in lJson else 'unknown'
 					## DATA SESSION
-					elif 'proxyid' in lJson:
-						lJson = lProxyMsgFiler.filterMessage(lJson)
-						if lJson is None:
-							continue
-						if lType == 'StartProxyService':
-							if 'proxyid' in lJson:
-								self.__closePendingDataSessions('service start without close',lTs,lJson['proxyid'])
-						elif lType == 'StopProxyService':
-							if 'proxyid' in lJson:
-								self.__closePendingDataSessions('service stop',lTs,lJson['proxyid'])
-						elif lType == 'OpenDataSession':
-							if not 'proxyid' in lJson:
-								raise Exception('missing proxyid')
-							
-							lDataSessionOidcSubs.addOccurence(lJson['oidcsub'])
-							lDataSessionProxyIds.addOccurence(lJson['proxyid'])
-							
-							lSession = self.__editDataSession(lJson)
-							if 'startts' in lSession and lSession['startts'] != lTs:
-								raise Exception('this data session was already created')
-							lDirectorySessionId = lJson['directorysessionid']
-							if lDirectorySessionId in self.__mDirectorySessions:
-								self.__mDirectorySessions[lDirectorySessionId]['datasessioncount'] = self.__mDirectorySessions[lDirectorySessionId]['datasessioncount'] + 1
-							lResult = lJson['result'] if 'result' in lJson else ''
-							if lResult == 'EC_Ok':
-								lSession['isvalid'] = True
-								if lSession['tmplogin'] in self.__mDataSessionsTmpLoginIndex:
-									raise Exception('tmp_login already used by an other data session')
-								self.__mDataSessionsTmpLoginIndex[lSession['tmplogin']] = lSession
-							lSession['startts'] = lTs
-							
-						elif lType == 'CloseDataSession':
-							lSession = self.__editDataSession(lJson)
-							lResult = lJson['result'] if 'result' in lJson else ''
-							if not lSession is None and lResult == 'EC_Ok':
-								lSession['endts'] = lTs
-						elif lType == 'RevokeDataSession':
-							lSession = self.__editDataSession(lJson)
-							lSession['revokeinfo'] = lJson['revokeinfo']
-							if not 'endts' in lSession:
-								lSession['endts'] = lTs
-						elif lType == 'DestroyPgRoles':
-							for tmplogin in lJson['roles']:
-								# look if this temporary role matches a session and tag it as revoked
-								# this might appen if a proxy is shutted down without having time to report a StopDirectoryService
-								lSession = self.__mDataSessionsTmpLoginIndex.get(tmplogin, None)
-								if lSession is not None:
-									if not 'revokeinfo' in lSession:
-										lSession['revokeinfo'] = 'tmp role destroyed'
-						elif lType == 'HeartbeatProxyService':
-							pass
+					#elif 'proxyid' in lJson:
+					#	lJson = lProxyMsgFiler.filterMessage(lJson)
+					#	if lJson is None:
+					#		continue
+					#	if lType == 'StartProxyService':
+					#		if 'proxyid' in lJson:
+					#			self.__closePendingDataSessions('service start without close',lTs,lJson['proxyid'])
+					#	elif lType == 'StopProxyService':
+					#		if 'proxyid' in lJson:
+					#			self.__closePendingDataSessions('service stop',lTs,lJson['proxyid'])
+					elif lType == 'OpenDataSession':
+						
+						if not 'oidcsub' in lJson:
+							if lJson['result'] != 'E_Missing_404':
+								raise Exception('missing oidcsub')
 						else:
-							print('unhandled proxy type %s @row %i' % (lType,lRowCptr))
+							lDataSessionOidcSubs.addOccurence(lJson['oidcsub'])
+						if 'proxyurl' in lJson:
+							lDataSessionProxyIds.addOccurence(lJson['proxyurl'])
+						
+						lSession = self.__editDataSession(lJson)
+						if 'startts' in lSession and lSession['startts'] != lTs:
+							raise Exception('this data session was already created')
+						lDirectorySessionId = lJson['directorysessionid']
+						if lDirectorySessionId in self.__mDirectorySessions:
+							self.__mDirectorySessions[lDirectorySessionId]['datasessioncount'] = self.__mDirectorySessions[lDirectorySessionId]['datasessioncount'] + 1
+						lResult = lJson['result'] if 'result' in lJson else ''
+						if lResult == 'E_No_Error':
+							lSession['isvalid'] = True
+						lSession['startts'] = lTs
+						
+					elif lType == 'DestroyDataSession':
+						lSession = self.__editDataSession(lJson)
+						if not lSession is None:
+							lSession['revokeinfo'] = lJson['reason']
+							lSession['endts'] = lTs
+							
+					#	elif lType == 'RevokeDataSession':
+					#		lSession = self.__editDataSession(lJson)
+					#		lSession['revokeinfo'] = lJson['revokeinfo']
+					#		if not 'endts' in lSession:
+					#			lSession['endts'] = lTs
+					#	elif lType == 'DestroyPgRoles':
+					#		for tmplogin in lJson['roles']:
+					#			# look if this temporary role matches a session and tag it as revoked
+					#			# this might appen if a proxy is shutted down without having time to report a StopDirectoryService
+					#			lSession = self.__mDataSessionsTmpLoginIndex.get(tmplogin, None)
+					#			if lSession is not None:
+					#				if not 'revokeinfo' in lSession:
+					#					lSession['revokeinfo'] = 'tmp role destroyed'
+					#	elif lType == 'HeartbeatProxyService':
+					#		pass
+					#	else:
+					#		print('unhandled proxy type %s @row %i' % (lType,lRowCptr))
 					## ???
 					else:
 						print('unhandled type %s @row %i' % (lType,lRowCptr))
+						raise Exception()
 				except:
 					raise Exception('fail to process row @%i %s' % (lRowCptr,r))
 			self.__closePendingDirectorySessions('end of report',lMaxTs)
@@ -437,9 +440,9 @@ class SessionAggregator:
 		# analyze borrow
 		for lJson in lBorrowEntries:
 			lType = lJson['type']
-			if lBorrowCount != lJson['borrowedlic']:
+			if lBorrowCount != lJson['lmxinfo']['lmxborrowedlic']:
 				# init borrow counter with offset read from lmx server
-				lBorrowCount = lJson['borrowedlic']
+				lBorrowCount = lJson['lmxinfo']['lmxborrowedlic']
 				self.__mBorrowChanges.append({'type':'borrowcountchange','borrowedlic':lBorrowCount,'ts':lJson['ts'],'tsstr':str(datetime.datetime.fromtimestamp(lJson['ts']))})
 		
 		lStats = {
@@ -577,10 +580,10 @@ class ExtractBillingInformations:
 				lStartTs = e['startts']
 				lEndTs = None
 				lEndTsIsLastClientContact = True
-				if e['revokeinfo'] in ['Close by application','Revoked by the directory','revoked by proxy event','Lost directory connection','end of life','pg_role was destroyed','Service is about to exit'] :
+				if e['revokeinfo'].lower() in ['close by application','directory session was removed','revoked by admin','end of life','user was removed or disabled'] : # 'Close by application','Revoked by the directory','revoked by proxy event','Lost directory connection','end of life','pg_role was destroyed','Service is about to exit'
 					lEndTs = e['endts']
 					lEndTsIsLastClientContact = False
-				elif e['revokeinfo'] in ['No heartbeat received','service start without close','end of report','tmp role destroyed']:
+				elif e['revokeinfo'].lower() in ['no heartbeat','proxy was removed','corrupted db','not authenticated on time','proxy is no more available','build is no more available']: # 'No heartbeat received','service start without close','end of report','tmp role destroyed'
 					lEndTs = e['lastclientcontact']
 				else:
 					raise Exception('unhandled revoke info "%s" %s' % (e['revokeinfo'],e) )
@@ -589,15 +592,18 @@ class ExtractBillingInformations:
 				if not e['directorysessionid'] in lDirectorySessions:
 					print('/!\\ Data session reference an unknown directory session "%s", type %s, oidcsub "%s"' % (e['directorysessionid'], 'native' if e['native'] else 'web', e['oidcsub'] if 'oidcsub' in e  else 'n/a' ))
 				
-				lHasLic = e['haslicense']
 				
 				# here do not use copy.deepcopy(e) it is really slow
 				lStartEntry = {}
-				for k in ['revokeinfo','directorysessionid','errors','haslicense','isvalid','native','sessionid','type','oidcsub']:
+				for k in ['revokeinfo','directorysessionid','errors','isvalid','native','sessionid','type','oidcsub']:
 					lStartEntry[k] = e[k]
+				lHasLic = False
+				if 'locallmxfeature' in e:
+					lHasLic = True
+					lStartEntry['locallmxfeature'] = e['locallmxfeature']
 				
 				lStartEntry['ts'] = lStartTs
-				lStartEntry['lic_count_delta']= 0 if lHasLic else 1
+				lStartEntry['lic_count_delta'] = 0 if lHasLic else 1
 				lStartEntry['endts'] = lEndTs
 				lStartEntry['endtsislastclientcontact'] = lEndTsIsLastClientContact
 				lNewEntries.append(lStartEntry)
@@ -698,6 +704,12 @@ if __name__ == '__main__':
 	
 	lFilesToProcess = []
 	
+	lValidateActivityReportExePath = None
+	for p in ['./bin','../../GENERATED/DELIVERY/MSVC16_x64/Tool_ValidateActivityReport/bin']:
+		lPathToTest = os.path.join(p,'Tool_ValidateActivityReport.exe')
+		if os.path.isfile(lPathToTest):
+			lValidateActivityReportExePath = lPathToTest
+			break
 	lInputBasePath = None
 	if os.path.isfile(lInputPathOrFile):
 		lFilesToProcess.append(os.path.abspath(lInputPathOrFile))
@@ -727,12 +739,13 @@ if __name__ == '__main__':
 		except:
 			pass
 		
-		lSessionAggregator = SessionAggregator('./bin/ValidateActivityReport.exe',lInput,lIgnoreValidityCheck)
+		lSessionAggregator = SessionAggregator(lValidateActivityReportExePath,lInput,lIgnoreValidityCheck)
 		lReportInformations = lSessionAggregator.getHeader();
-			
-		# lBaseName = os.path.splitext(os.path.basename(lInput))[0]
-		lBaseName = lReportInformations['LMX_feature'] + '_' + lReportInformations['Period_end'] + '_' + lReportInformations['Period_start']
-
+		
+		lBaseName = lReportInformations['Period_end'] + '_' + lReportInformations['Period_start']
+		if 'License_ID' in lReportInformations:
+			lBaseName = lReportInformations['License_ID'] + '_' + lBaseName
+		print(lBaseName)
 		lOutputRawFile = os.path.join(lOutputFolder,lBaseName + '_sessions_raw_output.json')
 		lCsvFile = os.path.join(lOutputFolder,lBaseName + '_billing_informations.csv')
 		if not lForceReprocessing and (os.path.isfile(lOutputRawFile) or lNoIntermediateResult) and os.path.isfile(lCsvFile):
