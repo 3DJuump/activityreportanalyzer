@@ -1,4 +1,10 @@
-﻿#!/usr/bin/env python 
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+#
+# This program belongs to AKKODIS INGENIERIE PRODUIT SAS.
+# It is considered a trade secret, and is not to be divulged or used
+# by parties who have not received written authorization from the owner.
+#
 
 ## DEPENDENCIES
 import json
@@ -580,7 +586,7 @@ class ExtractBillingInformations:
 				lStartTs = e['startts']
 				lEndTs = None
 				lEndTsIsLastClientContact = True
-				if e['revokeinfo'].lower() in ['close by application','directory session was removed','revoked by admin','end of life','user was removed or disabled'] : # 'Close by application','Revoked by the directory','revoked by proxy event','Lost directory connection','end of life','pg_role was destroyed','Service is about to exit'
+				if e['revokeinfo'].lower() in ['close by application','directory session was removed','revoked by admin','end of life','user was removed or disabled','end of report'] : # 'Close by application','Revoked by the directory','revoked by proxy event','Lost directory connection','end of life','pg_role was destroyed','Service is about to exit'
 					lEndTs = e['endts']
 					lEndTsIsLastClientContact = False
 				elif e['revokeinfo'].lower() in ['no heartbeat','proxy was removed','corrupted db','not authenticated on time','proxy is no more available','build is no more available']: # 'No heartbeat received','service start without close','end of report','tmp role destroyed'
@@ -728,7 +734,7 @@ if __name__ == '__main__':
 	
 	if lIgnoreValidityCheck:
 		print('/!\\/!\\/!\\/!\\')
-		print('Activity report was DISABLED')
+		print('Activity report validity check was DISABLED')
 		print('/!\\/!\\/!\\/!\\')
 	
 	for lInput in lFilesToProcess:
