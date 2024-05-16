@@ -1,6 +1,6 @@
-﻿#!/usr/bin/env python 
+#!/usr/bin/env python 
 # -*- coding: utf-8 -*- 
-# Copyright (C) converter3dji 2022 AKKA INGENIERIE PRODUIT (support@realfusio.com)
+# Copyright (C) converter3dji 2022 AKKODIS INGENIERIE PRODUIT SAS (support@realfusio.com)
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
