@@ -1,19 +1,20 @@
-#!/usr/bin/env python 
-# -*- coding: utf-8 -*- 
-# Copyright (C) converter3dji 2022 AKKODIS INGENIERIE PRODUIT SAS (support@realfusio.com)
-# 
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+#
+# Copyright (C) activityreportanalyzer.py 2024 AKKODIS INGENIERIE PRODUIT SAS (support@3djuump.com)
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #         http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+#
 
 ## DEPENDENCIES
 import json
@@ -282,7 +283,7 @@ class SessionAggregator:
 		lDataSessionOidcSubs = OccurenceCounter()
 		lDataSessionProxyIds = OccurenceCounter()
 		
-		lRemoveSignInfoRe = re.compile('("chainid":[0-9]+,?|"chainsign":"\S+?",?)')
+		lRemoveSignInfoRe = re.compile('("chainid":[0-9]+,?|"chainsign":"\\S+?",?)')
 		
 		lAllUniqueEvent = set()
 		lLastTs = {}
@@ -598,7 +599,7 @@ class ExtractBillingInformations:
 				if e['revokeinfo'].lower() in ['close by application','directory session was removed','revoked by admin','end of life','user was removed or disabled','end of report'] : # 'Close by application','Revoked by the directory','revoked by proxy event','Lost directory connection','end of life','pg_role was destroyed','Service is about to exit'
 					lEndTs = e['endts']
 					lEndTsIsLastClientContact = False
-				elif e['revokeinfo'].lower() in ['no heartbeat','proxy was removed','corrupted db','not authenticated on time','proxy is no more available','build is no more available']: # 'No heartbeat received','service start without close','end of report','tmp role destroyed'
+				elif e['revokeinfo'].lower() in ['no heartbeat','proxy was removed','corrupted db','not authenticated on time','proxy is no more available','build is no more available','directory session is missing']: # 'No heartbeat received','service start without close','end of report','tmp role destroyed'
 					lEndTs = e['lastclientcontact']
 				else:
 					raise Exception('unhandled revoke info "%s" %s' % (e['revokeinfo'],e) )
