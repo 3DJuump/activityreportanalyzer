@@ -1,3 +1,3 @@
 # activityreportanalyzer
 
-This repository publish a python script used to process usage log of 3D Juump Infinite Directory.
+activityreportanalyzer is now part of 3D Juump Infinite core features. It is accessible in the CLI.
